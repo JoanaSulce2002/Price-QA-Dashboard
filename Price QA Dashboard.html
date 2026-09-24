@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Price QA Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#f6f5f1; --panel:#ffffff; --border:#e6e3da; --text:#201f1c; --muted:#7a756c;
+  --accent:#c05a33; --accent-soft:#f5e2d8;
+  --ok:#2f8a52; --ok-bg:#e3f5e8; --ok-soft:#c9ecd4;
+  --err:#c73f34; --err-bg:#fbe6e3;
+  --warn:#c98a1d; --warn-bg:#fbf0da;
+  --blue:#3f6fa8; --blue-bg:#e5eef8;
+  --purple:#7c5cad; --purple-bg:#eee6f7;
+  --shadow:0 1px 2px rgba(20,18,14,.05),0 6px 18px rgba(20,18,14,.06);
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#141312; --panel:#1e1c1a; --border:#39352e; --text:#f1ede6; --muted:#a89f92;
+    --accent-soft:#3d2a1e; --ok-bg:#173324; --ok-soft:#1e4530; --err-bg:#3a1f1b; --warn-bg:#3a2c10;
+    --blue-bg:#1c2c40; --purple-bg:#2c2138;
+    --shadow:0 1px 2px rgba(0,0,0,.35),0 6px 18px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#141312; --panel:#1e1c1a; --border:#39352e; --text:#f1ede6; --muted:#a89f92;
+  --accent-soft:#3d2a1e; --ok-bg:#173324; --ok-soft:#1e4530; --err-bg:#3a1f1b; --warn-bg:#3a2c10;
+  --blue-bg:#1c2c40; --purple-bg:#2c2138;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px);}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
+header{padding:26px 20px 6px;max-width:1120px;margin:0 auto;}
+h1{font-size:1.45rem;margin:0 0 4px;font-weight:750;letter-spacing:-.01em;background:linear-gradient(90deg,var(--accent),var(--purple));-webkit-background-clip:text;background-clip:text;color:transparent;}
+p.sub{color:var(--muted);margin:0 0 18px;font-size:.92rem;}
+main{max-width:1120px;margin:0 auto;padding:0 20px 60px;}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:var(--shadow);}
+.upload-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+input[type=file]{font-size:.85rem;max-width:100%;color:var(--text);}
+button{background:var(--accent);color:#fff;border:none;border-radius:9px;padding:8px 14px;font-size:.84rem;font-weight:600;cursor:pointer;}
+button.secondary{background:transparent;color:var(--text);border:1px solid var(--border);}
+button.ok-btn{background:var(--ok);}
+button.fix-btn{background:var(--blue);}
+button:active{opacity:.8;}
+textarea,input[type=text]{padding:8px 11px;border-radius:9px;border:1px solid var(--border);background:var(--panel);color:var(--text);font-size:.85rem;font-family:inherit;}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:12px;margin-bottom:16px;}
+.stat{border-radius:12px;padding:15px;box-shadow:var(--shadow);border:1px solid var(--border);}
+.stat .n{font-size:1.55rem;font-weight:750;}
+.stat .l{color:var(--muted);font-size:.76rem;margin-top:2px;}
+.stat.total{background:var(--blue-bg);} .stat.total .n{color:var(--blue);}
+.stat.issues{background:var(--err-bg);} .stat.issues .n{color:var(--err);}
+.stat.open{background:var(--warn-bg);} .stat.open .n{color:var(--warn);}
+.stat.resolved{background:var(--ok-bg);} .stat.resolved .n{color:var(--ok);}
+.stat.clean{background:var(--ok-bg);} .stat.clean .n{color:var(--ok);}
+
+.tabs{display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid var(--border);}
+.tab{padding:9px 4px;margin-right:18px;font-size:.9rem;font-weight:650;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+.filters select{padding:8px 11px;border-radius:9px;border:1px solid var(--border);background:var(--panel);color:var(--text);font-size:.85rem;}
+
+.card{border-radius:12px;margin-bottom:10px;box-shadow:var(--shadow);overflow:hidden;border:1px solid var(--border);background:var(--panel);}
+.card.is-resolved{border-color:var(--ok-soft);}
+.card summary{list-style:none;cursor:pointer;padding:13px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.card summary::-webkit-details-marker{display:none;}
+.chev{transition:transform .15s;color:var(--muted);font-size:.8rem;}
+.card[open] .chev{transform:rotate(90deg);}
+.pid{font-weight:650;font-size:.92rem;}
+.count-badge{font-size:.74rem;font-weight:700;padding:3px 9px;border-radius:999px;}
+.count-badge.open{background:var(--err-bg);color:var(--err);}
+.count-badge.resolved{background:var(--ok-bg);color:var(--ok);}
+.spacer{flex:1;}
+.link-btn{display:inline-flex;align-items:center;gap:4px;color:var(--blue);text-decoration:none;font-size:.8rem;font-weight:600;padding:5px 10px;border:1px solid var(--blue-bg);border-radius:8px;background:var(--blue-bg);}
+.link-btn:hover{opacity:.85;}
+.card-body{padding:0 16px 16px;border-top:1px solid var(--border);}
+
+.issue-block{padding:11px 0;border-bottom:1px dashed var(--border);}
+.issue-block:last-of-type{border-bottom:none;}
+.issue-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.field-tag{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);min-width:100px;}
+.issue-val{font-family:ui-monospace,SFMono-Regular,monospace;font-size:.82rem;padding:2px 7px;border-radius:6px;}
+.issue-val.strike{text-decoration:line-through;opacity:.6;}
+.issue-msg{font-size:.83rem;color:var(--text);}
+.arrow{color:var(--muted);}
+.fixed-tag{font-size:.74rem;font-weight:700;color:var(--ok);background:var(--ok-bg);padding:2px 8px;border-radius:999px;}
+.fix-controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;padding-left:118px;}
+.fix-controls input{width:180px;}
+@media(max-width:520px){.fix-controls{padding-left:0;}}
+
+.raw{margin-top:12px;font-size:.78rem;color:var(--muted);}
+.raw code{background:var(--bg);padding:2px 5px;border-radius:5px;}
+
+.verify-box{margin-top:14px;padding:12px;background:var(--bg);border-radius:10px;border:1px solid var(--border);}
+.verify-box textarea{width:100%;min-height:50px;resize:vertical;margin-bottom:8px;}
+.verified-note{margin-top:14px;padding:12px;background:var(--ok-bg);border-radius:10px;border:1px solid var(--ok-soft);font-size:.85rem;}
+.verified-note b{color:var(--ok);}
+
+.empty{color:var(--muted);text-align:center;padding:40px 20px;font-size:.9rem;}
+
+.insight-group{margin-bottom:26px;}
+.insight-title{font-weight:700;font-size:1rem;margin-bottom:10px;}
+.chart-wrap{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;box-shadow:var(--shadow);height:280px;margin-bottom:16px;}
+.chart-wrap.small{height:230px;}
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+@media(max-width:640px){.chart-grid{grid-template-columns:1fr;}}
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px;background:var(--panel);box-shadow:var(--shadow);}
+table{border-collapse:collapse;width:100%;font-size:.83rem;min-width:640px;}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
+th{background:var(--bg);color:var(--muted);font-weight:650;font-size:.72rem;text-transform:uppercase;letter-spacing:.03em;}
+tr:last-child td{border-bottom:none;}
+td.num{font-variant-numeric:tabular-nums;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Price QA Dashboard</h1>
+  <p class="sub">Upload product data (JSON or CSV) to flag pricing and availability issues.</p>
+</header>
+<main>
+  <div class="panel upload-row">
+    <input id="file" type="file" accept=".json,.csv">
+    <button class="secondary" id="sampleBtn">Load sample data</button>
+    <span id="fileInfo" style="color:var(--muted);font-size:.82rem;"></span>
+  </div>
+
+  <div id="results" style="display:none;">
+    <div class="stats" id="stats"></div>
+
+    <div class="tabs">
+      <div class="tab active" data-tab="issues">Issues</div>
+      <div class="tab" data-tab="insights">Price Insights</div>
+    </div>
+
+    <div id="issuesTab">
+      <div class="filters">
+        <select id="filterStatus">
+          <option value="open">Open issues</option>
+          <option value="resolved">Resolved</option>
+          <option value="all">All</option>
+        </select>
+        <select id="filterType"><option value="">All issue types</option></select>
+        <input type="text" id="search" placeholder="Search by id / name...">
+      </div>
+      <div id="issuesList"></div>
+    </div>
+
+    <div id="insightsTab" style="display:none;"></div>
+  </div>
+  <div id="emptyState" class="empty">No data loaded yet.</div>
+</main>
+
+<script>
+const LINK_ICON = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H8M17 7V16"/></svg>';
+const STORE_VERIFY = 'priceqa_verified_v1';
+const STORE_FIX = 'priceqa_fixed_v1';
+
+function checkPriceField(raw){
+  const issues = [];
+  if (raw === undefined || raw === null || String(raw).trim() === '') return issues;
+  const str = String(raw).trim();
+  if (str.includes(',')){ issues.push({msg:'Contains comma (not accepted)', cat:'format'}); return issues; }
+  if (!/^\d+(\.\d{2})?$/.test(str)) issues.push({msg:'Invalid format (whole number, or exactly 2 digits after the decimal point)', cat:'format'});
+  const digits = str.split('.')[0].replace(/[^\d]/g,'').length;
+  if (digits === 1) issues.push({msg:'Price too low (single digit — no real product priced this low)', cat:'range'});
+  else if (digits > 3) issues.push({msg:'Price too high (4+ digits)', cat:'range'});
+  return issues;
+}
+const CAT_COLOR = {format:'var(--warn)', range:'var(--err)', currency:'var(--purple)', stock:'var(--blue)'};
+const CAT_BG = {format:'var(--warn-bg)', range:'var(--err-bg)', currency:'var(--purple-bg)', stock:'var(--blue-bg)'};
+
+function getUrl(row){ return row.product_url || row.url || row.link || row.product_link || ''; }
+function getId(row, idx){ return row.id || row.sku || row.product_id || row.name || `#${idx+1}`; }
+
+function validateRow(row){
+  const issues = [];
+  const priceFields = ['recommended_price','lowest_price','sale_price'];
+  priceFields.forEach(f=>{
+    checkPriceField(row[f]).forEach(({msg,cat})=> issues.push({field:f, value: row[f] ?? '(empty)', issue: msg, cat, fixable: (cat==='format'||cat==='range')}));
+  });
+  const availability = (row.availability || '').toString().trim().toLowerCase();
+  if (availability === 'in stock'){
+    const hasAnyPrice = priceFields.some(f => row[f] !== undefined && row[f] !== null && String(row[f]).trim() !== '');
+    if (!hasAnyPrice) issues.push({field:'availability', value:'in stock', issue:'In stock but has no price set', cat:'stock', fixable:true, fixField:'recommended_price'});
+  }
+  if (!row.currency || String(row.currency).trim() === '') issues.push({field:'currency', value:'(empty)', issue:'Missing currency', cat:'currency', fixable:true});
+  return issues;
+}
+
+function loadStore(key){ try{ return JSON.parse(localStorage.getItem(key) || '{}'); }catch(e){ return {}; } }
+function saveStore(key, map){ try{ localStorage.setItem(key, JSON.stringify(map)); }catch(e){} }
+
+let products = [];
+let totalRows = 0;
+let verifiedMap = loadStore(STORE_VERIFY);
+let fixedMap = loadStore(STORE_FIX);
+let charts = [];
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function issueKey(pid, idx){ return pid + '::' + idx; }
+
+function unresolvedCount(p){
+  if (verifiedMap[p.id]) return 0;
+  return p.issues.filter((_,idx)=>!fixedMap[issueKey(p.id,idx)]).length;
+}
+
+function renderIssues(){
+  const status = document.getElementById('filterStatus').value;
+  const type = document.getElementById('filterType').value;
+  const q = document.getElementById('search').value.toLowerCase();
+  const affected = products.filter(p=>p.issues.length);
+
+  const shown = affected.filter(p=>{
+    const open = unresolvedCount(p) > 0;
+    if (status==='open' && !open) return false;
+    if (status==='resolved' && open) return false;
+    if (q && !String(p.id).toLowerCase().includes(q)) return false;
+    if (type && !p.issues.some(i=>i.issue===type)) return false;
+    return true;
+  });
+
+  const list = document.getElementById('issuesList');
+  if (!shown.length){
+    list.innerHTML = `<div class="empty">Nothing here — try a different filter.</div>`;
+  } else {
+    list.innerHTML = shown.map(p=>{
+      const v = verifiedMap[p.id];
+      const open = unresolvedCount(p);
+      const linkHtml = p.url ? `<a class="link-btn" href="${escapeHtml(p.url)}" target="_blank" rel="noopener">Open product ${LINK_ICON}</a>` : '';
+
+      const issuesHtml = p.issues.map((i,idx)=>{
+        const key = issueKey(p.id, idx);
+        const fx = fixedMap[key];
+        if (v || fx){
+          const correctedVal = v ? '(verified as-is)' : fx.value;
+          return `<div class="issue-block">
+            <div class="issue-row">
+              <span class="dot" style="background:var(--ok)"></span>
+              <span class="field-tag">${i.field}</span>
+              <span class="issue-val strike" style="background:${CAT_BG[i.cat]};color:${CAT_COLOR[i.cat]}">${escapeHtml(i.value)}</span>
+              ${!v ? `<span class="arrow">→</span><span class="issue-val" style="background:var(--ok-bg);color:var(--ok)">${escapeHtml(correctedVal)}</span>` : ''}
+              <span class="fixed-tag">${v ? 'Verified' : 'Fixed'}</span>
+            </div>
+          </div>`;
+        }
+        return `<div class="issue-block">
+          <div class="issue-row">
+            <span class="dot" style="background:${CAT_COLOR[i.cat]}"></span>
+            <span class="field-tag">${i.field}</span>
+            <span class="issue-val" style="background:${CAT_BG[i.cat]};color:${CAT_COLOR[i.cat]}">${escapeHtml(i.value)}</span>
+            <span class="issue-msg">${escapeHtml(i.issue)}</span>
+          </div>
+          ${i.fixable ? `<div class="fix-controls">
+            <input type="text" class="fix-input" data-key="${escapeHtml(key)}" data-field="${escapeHtml(i.fixField||i.field)}" placeholder="Enter correct value">
+            <button class="fix-btn fix-save" data-key="${escapeHtml(key)}">Fix &amp; mark resolved</button>
+          </div>` : ''}
+        </div>`;
+      }).join('');
+
+      const rawHtml = `<div class="raw">recommended: <code>${escapeHtml(p.row.recommended_price ?? '—')}</code> &nbsp;
+        lowest: <code>${escapeHtml(p.row.lowest_price ?? '—')}</code> &nbsp;
+        sale: <code>${escapeHtml(p.row.sale_price ?? '—')}</code> &nbsp;
+        currency: <code>${escapeHtml(p.row.currency ?? '—')}</code> &nbsp;
+        availability: <code>${escapeHtml(p.row.availability ?? '—')}</code></div>`;
+
+      const verifyBlock = v
+        ? `<div class="verified-note"><b>✓ Verified — matches website.</b>${v.note ? ' '+escapeHtml(v.note) : ''}
+             <div style="margin-top:8px;"><button class="secondary unverify-btn" data-id="${escapeHtml(p.id)}">Reopen</button></div></div>`
+        : `<div class="verify-box">
+             <div style="font-size:.82rem;margin-bottom:8px;color:var(--muted);">Or, if the listed prices are actually correct as-is:</div>
+             <textarea class="verify-note" id="note-${escapeHtml(p.id)}" placeholder="Optional note, e.g. \"confirmed $49.99 on site\""></textarea>
+             <button class="ok-btn verify-btn" data-id="${escapeHtml(p.id)}">✓ Mark whole product as verified / matches website</button>
+           </div>`;
+
+      return `<details class="card ${open===0?'is-resolved':''}">
+        <summary>
+          <span class="chev">▶</span>
+          <span class="pid">${escapeHtml(p.id)}</span>
+          <span class="count-badge ${open===0?'resolved':'open'}">${v ? 'Verified' : open===0 ? 'Fixed' : open+' open'}</span>
+          <span class="spacer"></span>
+          ${linkHtml}
+        </summary>
+        <div class="card-body">${issuesHtml}${rawHtml}${verifyBlock}</div>
+      </details>`;
+    }).join('');
+
+    list.querySelectorAll('.verify-btn').forEach(btn=>btn.addEventListener('click', ()=>{
+      const id = btn.dataset.id;
+      const note = document.getElementById('note-'+id)?.value?.trim() || '';
+      verifiedMap[id] = {note, at:new Date().toISOString()};
+      saveStore(STORE_VERIFY, verifiedMap);
+      renderIssues();
+    }));
+    list.querySelectorAll('.unverify-btn').forEach(btn=>btn.addEventListener('click', ()=>{
+      delete verifiedMap[btn.dataset.id];
+      saveStore(STORE_VERIFY, verifiedMap);
+      renderIssues();
+    }));
+    list.querySelectorAll('.fix-save').forEach(btn=>btn.addEventListener('click', ()=>{
+      const key = btn.dataset.key;
+      const input = list.querySelector(`.fix-input[data-key="${CSS.escape(key)}"]`);
+      const val = input?.value?.trim();
+      if (!val){ input?.focus(); return; }
+      fixedMap[key] = {value: val, field: input.dataset.field, at:new Date().toISOString()};
+      saveStore(STORE_FIX, fixedMap);
+      renderIssues();
+    }));
+  }
+
+  const allIssueCount = products.reduce((a,p)=>a+p.issues.length,0);
+  const affectedCount = affected.length;
+  const openCount = affected.filter(p=>unresolvedCount(p)>0).length;
+  document.getElementById('stats').innerHTML = `
+    <div class="stat total"><div class="n">${totalRows}</div><div class="l">Products checked</div></div>
+    <div class="stat issues"><div class="n">${allIssueCount}</div><div class="l">Total issues</div></div>
+    <div class="stat open"><div class="n">${openCount}</div><div class="l">Still open</div></div>
+    <div class="stat resolved"><div class="n">${affectedCount-openCount}</div><div class="l">Resolved</div></div>
+    <div class="stat clean"><div class="n">${totalRows-affectedCount}</div><div class="l">Clean products</div></div>
+  `;
+}
+
+function numeric(v){
+  if (v===undefined||v===null) return NaN;
+  const s = String(v).trim();
+  if (!s || s.includes(',')) return NaN;
+  const n = parseFloat(s);
+  return isNaN(n) ? NaN : n;
+}
+
+function bucketCounts(field){
+  const b = {lt10:0, r10_99:0, r100_999:0, gte1000:0, missing:0};
+  products.forEach(p=>{
+    const n = numeric(p.row[field]);
+    if (isNaN(n)) b.missing++;
+    else if (n<10) b.lt10++;
+    else if (n<100) b.r10_99++;
+    else if (n<1000) b.r100_999++;
+    else b.gte1000++;
+  });
+  return b;
+}
+
+function destroyCharts(){ charts.forEach(c=>c.destroy()); charts = []; }
+
+function renderInsights(){
+  destroyCharts();
+  const priceFields = [['recommended_price','Recommended price','#3f6fa8'],['lowest_price','Lowest price','#2f8a52'],['sale_price','Sale price','#c98a1d']];
+  const labels = ['<$10 (error)','$10–$99','$100–$999','$1,000+ (error)'];
+
+  const container = document.getElementById('insightsTab');
+  container.innerHTML = `
+    <div class="insight-group">
+      <div class="insight-title">Price distribution by field</div>
+      <div class="chart-wrap"><canvas id="priceChart"></canvas></div>
+    </div>
+    <div class="insight-group">
+      <div class="chart-grid">
+        <div>
+          <div class="insight-title">Currency breakdown</div>
+          <div class="chart-wrap small"><canvas id="currChart"></canvas></div>
+        </div>
+        <div>
+          <div class="insight-title">Availability breakdown</div>
+          <div class="chart-wrap small"><canvas id="availChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+    <div class="insight-group">
+      <div class="insight-title">Numbers</div>
+      <div class="table-wrap"><table id="numTable"></table></div>
+    </div>`;
+
+  const datasets = priceFields.map(([field,label,color])=>{
+    const b = bucketCounts(field);
+    return {label, backgroundColor:color, data:[b.lt10,b.r10_99,b.r100_999,b.gte1000]};
+  });
+
+  charts.push(new Chart(document.getElementById('priceChart'), {
+    type:'bar',
+    data:{labels, datasets},
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}, scales:{y:{beginAtZero:true, ticks:{precision:0}}}}
+  }));
+
+  const curCounts = {}; products.forEach(p=>{ const c=(p.row.currency&&String(p.row.currency).trim())||'Missing'; curCounts[c]=(curCounts[c]||0)+1; });
+  const palette = ['#3f6fa8','#2f8a52','#c98a1d','#c05a33','#7c5cad','#c73f34','#5c9ea8'];
+  charts.push(new Chart(document.getElementById('currChart'), {
+    type:'doughnut',
+    data:{labels:Object.keys(curCounts), datasets:[{data:Object.values(curCounts), backgroundColor:palette}]},
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
+  }));
+
+  const availCounts = {}; products.forEach(p=>{ const a=(p.row.availability&&String(p.row.availability).trim())||'Unspecified'; availCounts[a]=(availCounts[a]||0)+1; });
+  charts.push(new Chart(document.getElementById('availChart'), {
+    type:'doughnut',
+    data:{labels:Object.keys(availCounts), datasets:[{data:Object.values(availCounts), backgroundColor:palette}]},
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
+  }));
+
+  const tbl = document.getElementById('numTable');
+  let rows = '<thead><tr><th>Field</th><th>&lt;$10 (error)</th><th>$10–$99</th><th>$100–$999</th><th>$1,000+ (error)</th><th>Valid prices</th></tr></thead><tbody>';
+  priceFields.forEach(([field,label])=>{
+    const b = bucketCounts(field);
+    const valid = b.lt10+b.r10_99+b.r100_999+b.gte1000;
+    const pct = n => valid ? ((n/valid*100).toFixed(0)+'%') : '0%';
+    rows += `<tr><td>${label}</td>
+      <td class="num">${b.lt10} (${pct(b.lt10)})</td>
+      <td class="num">${b.r10_99} (${pct(b.r10_99)})</td>
+      <td class="num">${b.r100_999} (${pct(b.r100_999)})</td>
+      <td class="num">${b.gte1000} (${pct(b.gte1000)})</td>
+      <td class="num">${valid} of ${totalRows}</td></tr>`;
+  });
+  rows += '</tbody>';
+  tbl.innerHTML = rows;
+}
+
+function loadRows(rows){
+  totalRows = rows.length;
+  products = rows.map((row, idx)=>({ id:getId(row,idx), url:getUrl(row), row, issues:validateRow(row) }));
+  verifiedMap = loadStore(STORE_VERIFY);
+  fixedMap = loadStore(STORE_FIX);
+
+  const types = [...new Set(products.flatMap(p=>p.issues.map(i=>i.issue)))];
+  const sel = document.getElementById('filterType');
+  sel.innerHTML = '<option value="">All issue types</option>' + types.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('emptyState').style.display = 'none';
+  renderIssues();
+  renderInsights();
+}
+
+document.getElementById('filterType').addEventListener('change', renderIssues);
+document.getElementById('filterStatus').addEventListener('change', renderIssues);
+document.getElementById('search').addEventListener('input', renderIssues);
+
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    const tab = t.dataset.tab;
+    document.getElementById('issuesTab').style.display = tab==='issues' ? 'block':'none';
+    document.getElementById('insightsTab').style.display = tab==='insights' ? 'block':'none';
+  });
+});
+
+document.getElementById('file').addEventListener('change', (e)=>{
+  const f = e.target.files[0];
+  if (!f) return;
+  document.getElementById('fileInfo').textContent = f.name;
+  const reader = new FileReader();
+  reader.onload = (ev)=>{
+    try{
+      if (f.name.toLowerCase().endsWith('.json')){
+        const data = JSON.parse(ev.target.result);
+        loadRows(Array.isArray(data) ? data : [data]);
+      } else {
+        const parsed = Papa.parse(ev.target.result, {header:true, skipEmptyLines:true});
+        loadRows(parsed.data);
+      }
+    }catch(err){ alert('Could not parse file: ' + err.message); }
+  };
+  reader.readAsText(f);
+});
+
+document.getElementById('sampleBtn').addEventListener('click', ()=>{
+  document.getElementById('fileInfo').textContent = 'sample data';
+  loadRows([
+    {id:'P001', recommended_price:'49.99', lowest_price:'39.99', sale_price:'44.99', currency:'USD', availability:'in stock', product_url:'https://example.com/products/p001'},
+    {id:'P002', recommended_price:'9', lowest_price:'7', sale_price:'', currency:'USD', availability:'in stock', product_url:'https://example.com/products/p002'},
+    {id:'P003', recommended_price:'1299', lowest_price:'1199', sale_price:'', currency:'EUR', availability:'out of stock', product_url:'https://example.com/products/p003'},
+    {id:'P004', recommended_price:'1,299.00', lowest_price:'1199', sale_price:'', currency:'EUR', availability:'in stock', product_url:'https://example.com/products/p004'},
+    {id:'P005', recommended_price:'59.9', lowest_price:'49.999', sale_price:'55', currency:'GBP', availability:'in stock', product_url:'https://example.com/products/p005'},
+    {id:'P006', recommended_price:'', lowest_price:'', sale_price:'', currency:'USD', availability:'in stock', product_url:'https://example.com/products/p006'},
+    {id:'P007', recommended_price:'120', lowest_price:'99', sale_price:'110', currency:'', availability:'in stock', product_url:'https://example.com/products/p007'},
+    {id:'P008', recommended_price:'120', lowest_price:'99', sale_price:'110', currency:'USD', availability:'out of stock', product_url:'https://example.com/products/p008'},
+  ]);
+});
+</script>
+</body>
+</html>
